@@ -16,8 +16,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.merged == true &&
-       github.event.pull_request.base.ref == 'develop' &&
-       github.event.pull_request.user.login != 'github-actions[bot]')
+       github.event.pull_request.base.ref == 'develop' )
     runs-on: ubuntu-latest
     concurrency:
       group: relnote-deploy-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.inputs.slug || 'auto' }}
