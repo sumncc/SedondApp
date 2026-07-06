@@ -1,0 +1,329 @@
+Software Requirements Specification (SRS)
+GP Appointment Booking System
+Version
+
+1.0
+
+1. Introduction
+1.1 Purpose
+
+The GP Appointment Booking System enables patients to book, modify, cancel, and manage appointments with General Practitioners (GPs). It also provides administrative and clinical functions for managing schedules, patient records, and appointment workflows.
+
+The system should support web, mobile, and API clients.
+
+2. Business Objectives
+Reduce telephone booking workload.
+Improve appointment utilisation.
+Reduce missed appointments.
+Provide self-service booking.
+Improve patient satisfaction.
+Support NHS-style appointment workflows.
+Maintain complete audit history.
+Ensure GDPR compliance.
+3. User Roles
+Patient
+
+Can
+
+Register
+Login
+View appointments
+Search GP availability
+Book appointment
+Cancel appointment
+Reschedule appointment
+Join waiting list
+View medical documents
+Receive notifications
+GP
+
+Can
+
+View daily schedule
+View patient information
+Start consultation
+Complete consultation
+Add consultation notes
+Issue prescriptions
+Refer patient
+Mark appointment outcome
+Receptionist
+
+Can
+
+Book appointments
+Cancel appointments
+Manage patient records
+Register patients
+View GP schedules
+Manage waiting list
+Practice Manager
+
+Can
+
+Configure clinics
+Configure GP schedules
+Create appointment slots
+Configure holidays
+Generate reports
+Manage users
+Administrator
+
+Can
+
+Manage system users
+Configure permissions
+Manage integrations
+Audit activities
+Configure notification templates
+4. Functional Requirements
+FR-1 Patient Registration
+
+Patient shall be able to
+
+Register online
+Verify email
+Verify mobile
+Reset password
+
+Validation
+
+NHS Number unique
+Email unique
+Mobile unique
+FR-2 Login
+
+Support
+
+Username/password
+NHS Login
+Multi-factor authentication
+FR-3 GP Availability
+
+Patient shall search by
+
+GP
+Practice
+Date
+Time
+Appointment type
+
+System shall display
+
+Available slots
+Booked slots
+Holiday slots
+FR-4 Appointment Booking
+
+Patient shall
+
+Select GP
+Select slot
+Choose appointment type
+
+Appointment types
+
+Face to face
+Telephone
+Video
+Home visit
+
+Booking confirmation shall generate
+
+Appointment ID
+Confirmation email
+SMS notification
+FR-5 Appointment Cancellation
+
+Patient may cancel before configurable cut-off.
+
+Example
+
+24 hours before appointment.
+
+Cancellation shall
+
+Release slot
+Notify GP
+Notify patient
+Offer slot to waiting list
+FR-6 Appointment Reschedule
+
+Patient may
+
+Change date
+Change GP
+Change appointment type
+
+Old appointment becomes cancelled.
+
+New appointment created.
+
+Audit retained.
+
+FR-7 Waiting List
+
+Patient may join waiting list.
+
+If cancellation occurs
+
+System shall
+
+Notify first eligible patient
+Hold slot for configurable time
+Automatically release if expired
+FR-8 GP Calendar
+
+GP can
+
+View appointments
+Block time
+Add leave
+Create emergency slots
+FR-9 Consultation
+
+GP can
+
+Start consultation
+Record symptoms
+Diagnosis
+Medication
+Follow-up actions
+FR-10 Prescription
+
+GP may
+
+Issue prescription
+Send electronically
+Print prescription
+FR-11 Notifications
+
+System sends
+
+Booking confirmation
+Reminder 48 hours
+Reminder 24 hours
+Cancellation notice
+Waiting list offer
+
+Channels
+
+SMS
+Email
+Push Notification
+FR-12 Search
+
+Receptionist may search
+
+NHS Number
+Patient Name
+DOB
+Mobile
+Appointment ID
+FR-13 Reporting
+
+Generate reports
+
+Daily appointments
+Missed appointments
+GP utilisation
+Waiting list
+Average booking time
+FR-14 Audit
+
+Audit
+
+Login
+Booking
+Cancellation
+Prescription
+Consultation updates
+
+Audit cannot be deleted.
+
+5. Non-Functional Requirements
+Performance
+Search <2 seconds
+Booking <3 seconds
+Support 10,000 concurrent users
+API response <500ms (95%)
+99.95% availability
+Security
+OAuth2
+OpenID Connect
+MFA
+TLS 1.3
+Encryption at rest
+GDPR compliance
+NHS DSP Toolkit compliance
+OWASP Top 10 protection
+Scalability
+
+Support
+
+Multiple practices
+Multiple regions
+Multi-tenant architecture
+Horizontal scaling
+Reliability
+Automatic retry
+No double booking
+ACID transaction for booking
+Event-driven notifications
+Availability
+
+24x7 operation
+
+Planned maintenance supported.
+
+Accessibility
+
+WCAG 2.2 AA
+
+6. Business Rules
+
+BR-1
+
+Patient cannot have two appointments at the same time.
+
+BR-2
+
+GP cannot exceed configured daily capacity.
+
+BR-3
+
+Appointments cannot be booked on holidays.
+
+BR-4
+
+Children under 16 require guardian details.
+
+BR-5
+
+Emergency appointments reserve 10% of slots.
+
+BR-6
+
+Maximum advance booking
+
+90 days.
+
+BR-7
+
+Cancellation within 24 hours requires confirmation.
+
+7. External Integrations
+
+NHS Login
+
+NHS Spine
+
+SMS Gateway
+
+Email Provider
+
+Video Consultation Platform
+
+Electronic Prescription Service (EPS)
+
+Calendar Service
