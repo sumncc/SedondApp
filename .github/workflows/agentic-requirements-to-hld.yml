@@ -99,7 +99,7 @@ jobs:
         with:
           branch: auto/hld/${{ steps.slug.outputs.value }}
           base: develop
-          title: docs: hld ${{ steps.slug.outputs.value }}
+          title: docs':' hld ${{ steps.slug.outputs.value }}
           body: |
             Source PR link: ${{ github.event.pull_request.html_url || 'manual-run' }}
             Changed paths detected: ${{ steps.changed.outputs.all_changed_files || github.event.inputs.input_path }}

@@ -76,7 +76,7 @@ jobs:
         with:
           branch: auto/code/${{ steps.slug.outputs.value }}
           base: develop
-          title: feat: ${{ steps.slug.outputs.value }}
+          title: feat':' ${{ steps.slug.outputs.value }}
           commit-message: "feat: generate code for ${{ steps.slug.outputs.value }}"
           body: |
             Source PR link: ${{ github.event.pull_request.html_url || 'manual-run' }}
