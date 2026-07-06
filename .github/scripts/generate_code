@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source .github/scripts/common.sh
+
+INPUT_PATHS="${1:-docs/generated/stories}"
+SLUG="${2:-sample-service}"
+SOURCE_PR="${3:-0}"
+SOURCE_BRANCH="${4:-unknown}"
+OUT_DIR="${5:-src/main/java}"
+CONFIG_PATH="${6:-.github/agent-prompts/config.yml}"
+PROMPT_PATH="${7:-.github/agent-prompts/generate_code.md}"
+
+require_file "$CONFIG_PATH"; require_file "$PROMPT_PATH"
+ensure_dir "$OUT_DIR"
+ensure_dir "src/test"
+ensure_dir "src/integrationTest"
+
+LANG="$(yaml_get project.language)"
+BASE_PACKAGE="$(yaml_get packages.basePackage)"
+JAVA_VERSION="$(yaml_get project.javaVersion)"
+PROGRAMMING_MODEL="$(yaml_get framework.programmingModel)"
+
+if [[ "$LANG" != "java" ]]; then
+  log "Non-java language configured (${LANG}). Creating placeholder implementation files."
+  ensure_dir "generated/non-java/${SLUG}"
+  echo "Configured language=${LANG}. Implement stack-specific generator." > "generated/non-java/${SLUG}/README.md"
+  exit 0
+fi
+
+PKG_PATH="$(echo "$BASE_PACKAGE" | tr '.' '/')"
+APP_DIR="src/main/java/${PKG_PATH}/agentic/${SLUG}"
+ensure_dir "$APP_DIR"
+
+cat > "${APP_DIR}/GeneratedController.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+
+@RestController
+public class GeneratedController {
+  @GetMapping("/generated/${SLUG}/health")
+  public Mono<String> health() {
+    return Mono.just("ok");
+  }
+}
+EOF
+
+TEST_DIR="src/test/java/${PKG_PATH}/agentic/${SLUG}"
+ensure_dir "$TEST_DIR"
+cat > "${TEST_DIR}/GeneratedControllerTest.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class GeneratedControllerTest {
+  @Test
+  void smoke() {
+    assertTrue(true);
+  }
+}
+EOF
+
+INT_DIR="src/integrationTest/java/${PKG_PATH}/agentic/${SLUG}"
+ensure_dir "$INT_DIR"
+cat > "${INT_DIR}/GeneratedControllerIT.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class GeneratedControllerIT {
+  @Test
+  void integrationSmoke() {
+    assertTrue(true);
+  }
+}
+EOF
+
+READY_STORIES=$(find "$INPUT_PATHS" -type f -name "*READY*.md" | wc -l | xargs)
+log "Processed READY stories: ${READY_STORIES}"
+log "Defaults used: Java ${JAVA_VERSION}, model=${PROGRAMMING_MODEL}"

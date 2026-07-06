@@ -1,0 +1,40 @@
+name: Agentic SDLC - Release Note to Sandbox Deploy
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      slug: { required: true, default: sample-service }
+      target_branch: { required: false, default: develop }
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-sandbox:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'develop' &&
+       github.event.pull_request.user.login != 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: relnote-deploy-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.inputs.slug || 'auto' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: develop, fetch-depth: 0 }
+      - id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: releaseNote/**
+      - if: github.event_name != 'workflow_dispatch' && steps.changed.outputs.any_changed != 'true'
+        run: echo "No releaseNote changes detected."
+      - name: Deploy sandbox
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: |
+          chmod +x .github/scripts/*
+          .github/scripts/deploy_sandbox "${{ github.event.inputs.slug || format('pr-{0}', github.event.pull_request.number) }}" "sandbox"
+      - name: Publish summary
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: cat deploy-summary.md >> $GITHUB_STEP_SUMMARY

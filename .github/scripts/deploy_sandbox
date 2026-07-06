@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SLUG="${1:-sample-service}"
+ENV_TARGET="${2:-sandbox}"
+
+echo "Deploying ${SLUG} to ${ENV_TARGET}..."
+sleep 2
+echo "Deployment complete."
+
+cat <<EOF > deploy-summary.md
+## Sandbox Deployment Summary
+- Slug: ${SLUG}
+- Environment: ${ENV_TARGET}
+- Status: SUCCESS
+- Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+EOF

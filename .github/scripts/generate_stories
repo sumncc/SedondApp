@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source .github/scripts/common.sh
+
+INPUT_PATHS="${1:-docs/generated/lld}"
+SLUG="${2:-sample-service}"
+SOURCE_PR="${3:-0}"
+SOURCE_BRANCH="${4:-unknown}"
+OUT_DIR="${5:-docs/generated/stories}"
+CONFIG_PATH="${6:-.github/agent-prompts/config.yml}"
+PROMPT_PATH="${7:-.github/agent-prompts/generate_stories.md}"
+
+require_file "$CONFIG_PATH"; require_file "$PROMPT_PATH"
+ensure_dir "$OUT_DIR"
+
+LLD_ID="LLD-${SLUG^^}-001"
+
+types=("api" "design" "devops" "testing" "security" "documentation")
+i=1
+for t in "${types[@]}"; do
+  STORY_ID="STORY-${SLUG^^}-$(printf "%03d" "$i")"
+  file="${OUT_DIR}/${SLUG}-${t}-READY.md"
+  cat > "$file" <<EOF
+# [JIRA] ${t^} story for ${SLUG}
+
+## Story ID
+${STORY_ID}
+
+## Traceability
+${LLD_ID} -> ${STORY_ID}
+
+## Title
+${t^}: ${SLUG}
+
+## Description
+Implement ${t} scope based on LLD for ${SLUG}.
+
+## Acceptance Criteria
+- [ ] Implementation complete
+- [ ] Tests added/updated
+- [ ] Docs updated where needed
+
+## Technical Notes
+- Follow project config and prompts.
+
+## Test Notes
+- Unit and integration test impact documented.
+
+## Security Notes
+- Validate security implications for this scope.
+
+## DevOps Notes
+- Update CI/CD or config if required.
+
+## Definition of Done
+- Code reviewed and merged to develop.
+EOF
+  ((i++))
+done
+
+echo "${OUT_DIR}"
