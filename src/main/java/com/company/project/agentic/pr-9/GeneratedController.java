@@ -1,0 +1,13 @@
+package com.company.project.agentic.pr-9;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+
+@RestController
+public class GeneratedController {
+  @GetMapping("/generated/pr-9/health")
+  public Mono<String> health() {
+    return Mono.just("ok");
+  }
+}
