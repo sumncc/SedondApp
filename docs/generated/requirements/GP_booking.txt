@@ -12,14 +12,14 @@ The GP Appointment Booking System enables patients to book, modify, cancel, and 
 The system should support web, mobile, and API clients.
 
 2. Business Objectives
-Reduce telephone booking workload.
-Improve appointment utilisation.
-Reduce missed appointments.
-Provide self-service booking.
-Improve patient satisfaction.
-Support NHS-style appointment workflows.
-Maintain complete audit history.
-Ensure GDPR compliance.
+  Reduce telephone booking workload.
+  Improve appointment utilisation.
+  Reduce missed appointments.
+  Provide self-service booking.
+  Improve patient satisfaction.
+  Support NHS-style appointment workflows.
+  Maintain complete audit history.
+  Ensure GDPR compliance.
 3. User Roles
 Patient
 
