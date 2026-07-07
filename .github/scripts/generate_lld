@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source .github/scripts/common.sh
+
+INPUT_PATHS="${1:-docs/generated/hld}"
+SLUG="${2:-sample-service}"
+SOURCE_PR="${3:-0}"
+SOURCE_BRANCH="${4:-unknown}"
+OUT_DIR="${5:-docs/generated/lld}"
+CONFIG_PATH="${6:-.github/agent-prompts/config.yml}"
+PROMPT_PATH="${7:-.github/agent-prompts/generate_lld.md}"
+
+require_file "$CONFIG_PATH"; require_file "$PROMPT_PATH"
+ensure_dir "$OUT_DIR"
+
+DIAGRAM_FMT="$(yaml_get documentation.diagramFormat)"
+HLD_ID="HLD-${SLUG^^}-001"
+LLD_ID="LLD-${SLUG^^}-001"
+
+cat > "${OUT_DIR}/${SLUG}-lld.md" <<EOF
+# Low Level Design: ${SLUG}
+
+- Traceability: ${HLD_ID} -> ${LLD_ID}
+- Source PR: #${SOURCE_PR}
+- Source Branch: ${SOURCE_BRANCH}
+- Input Paths: ${INPUT_PATHS}
+
+## Modules
+- controller
+- service
+- repository
+- dto
+- mapper
+
+## API Contract
+- GET /api/v1/items/{id}
+- POST /api/v1/items
+
+## Sequence
+\`\`\`${DIAGRAM_FMT}
+sequenceDiagram
+  participant C as Controller
+  participant S as Service
+  participant R as Repository
+  C->>S: createItem(dto)
+  S->>R: save(entity)
+  R-->>S: entity
+  S-->>C: responseDto
+\`\`\`
+EOF
+
+echo "${OUT_DIR}/${SLUG}-lld.md"

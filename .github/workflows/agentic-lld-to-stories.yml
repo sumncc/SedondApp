@@ -1,0 +1,66 @@
+name: Agentic SDLC - LLD to Stories
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      slug: { required: true }
+      input_path: { required: false, default: docs/generated/lld }
+      target_branch: { required: false, default: develop }
+      config_path: { required: false, default: .github/agent-prompts/config.yml }
+      prompt_path: { required: false, default: .github/agent-prompts/generate_stories.md }
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-stories:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'develop' )
+    runs-on: ubuntu-latest
+    concurrency:
+      group: lld-stories-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.inputs.slug || 'auto' }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: develop, fetch-depth: 0 }
+      - id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: docs/generated/lld/**
+      - if: github.event_name != 'workflow_dispatch' && steps.changed.outputs.any_changed != 'true'
+        run: echo "No LLD changes detected."
+      - uses: actions/setup-python@v5
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        with: { python-version: '3.11' }
+      - if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: pip install pyyaml
+      - id: slug
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.slug }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          fi
+      - if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: |
+          chmod +x .github/scripts/*
+          .github/scripts/generate_stories "${{ github.event.inputs.input_path || 'docs/generated/lld' }}" "${{ steps.slug.outputs.value }}" "${{ github.event.pull_request.number || 0 }}" "${{ github.head_ref || 'manual' }}" "docs/generated/stories" "${{ github.event.inputs.config_path || '.github/agent-prompts/config.yml' }}" "${{ github.event.inputs.prompt_path || '.github/agent-prompts/generate_stories.md' }}"
+      - uses: peter-evans/create-pull-request@v7
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        with:
+          branch: auto/stories/${{ steps.slug.outputs.value }}
+          base: develop
+          title: docs':' stories ${{ steps.slug.outputs.value }}
+          commit-message: "docs: generate stories for ${{ steps.slug.outputs.value }}"
+          body: |
+            Source PR link: ${{ github.event.pull_request.html_url || 'manual-run' }}
+            Changed paths detected: ${{ steps.changed.outputs.all_changed_files || github.event.inputs.input_path }}
+            Generated files list: docs/generated/stories/**
+            Validation summary: generated stories in JIRA template format
+            Traceability summary: LLD -> STORY
+            Skipped files and reasons: none

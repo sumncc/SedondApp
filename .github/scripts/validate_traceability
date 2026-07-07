@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${1:-.}"
+REPORT="${2:-traceability-report.md}"
+
+missing=0
+touch "$REPORT"
+{
+  echo "# Traceability Validation Report"
+  echo
+  echo "| Stage | Status | Details |"
+  echo "|---|---|---|"
+} > "$REPORT"
+
+check_link() {
+  local from_dir="$1"
+  local to_pattern="$2"
+  local stage="$3"
+
+  local found_from
+  found_from=$(find "$from_dir" -type f 2>/dev/null | wc -l | xargs || true)
+
+  if [[ "${found_from:-0}" -eq 0 ]]; then
+    echo "| ${stage} | ⚠️ SKIP | no files in ${from_dir} |" >> "$REPORT"
+    return
+  fi
+
+  local linked
+  linked=$(grep -RhoE "$to_pattern" "$from_dir" 2>/dev/null | wc -l | xargs || true)
+  if [[ "${linked:-0}" -gt 0 ]]; then
+    echo "| ${stage} | ✅ PASS | found ${linked} link token(s) matching ${to_pattern} |" >> "$REPORT"
+  else
+    echo "| ${stage} | ❌ FAIL | missing links matching ${to_pattern} in ${from_dir} |" >> "$REPORT"
+    missing=$((missing+1))
+  fi
+}
+
+check_link "docs/generated/requirements" "HLD-[A-Z0-9-]+" "REQ -> HLD"
+check_link "docs/generated/hld" "LLD-[A-Z0-9-]+" "HLD -> LLD"
+check_link "docs/generated/lld" "STORY-[A-Z0-9-]+" "LLD -> STORY"
+check_link "docs/generated/stories" "SRC-[A-Z0-9-*]+" "STORY -> SRC"
+check_link "src" "REL-[A-Z0-9-]+" "SRC -> releaseNote"
+
+echo >> "$REPORT"
+if [[ "$missing" -gt 0 ]]; then
+  echo "Validation failed with ${missing} broken stage link(s)." >> "$REPORT"
+  exit 1
+fi
+
+echo "Validation passed." >> "$REPORT"

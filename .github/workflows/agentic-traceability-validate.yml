@@ -1,0 +1,60 @@
+name: Agentic SDLC - Traceability Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      stage: { required: false, default: traceability }
+      slug: { required: false, default: manual-run }
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.base.ref == 'develop' &&
+       github.event.pull_request.user.login != 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: docs/generated/**
+      - if: github.event_name != 'workflow_dispatch' && steps.changed.outputs.any_changed != 'true'
+        run: echo "No docs/generated changes detected."
+      - name: Run validation
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: |
+          chmod +x .github/scripts/*
+          set +e
+          .github/scripts/validate_traceability "." "traceability-report.md"
+          echo "status=$?" >> $GITHUB_OUTPUT
+          set -e
+        id: validation
+      - name: Comment report on PR
+        if: github.event_name == 'pull_request' && (steps.changed.outputs.any_changed == 'true')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.existsSync('traceability-report.md')
+              ? fs.readFileSync('traceability-report.md', 'utf8')
+              : 'Traceability report not generated.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
+      - name: Fail on broken traceability
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: |
+          if grep -q "❌ FAIL" traceability-report.md; then
+            echo "Traceability failed"
+            exit 1
+          fi

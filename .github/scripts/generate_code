@@ -1,0 +1,376 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source .github/scripts/common.sh
+
+INPUT_PATHS="${1:-docs/generated/stories}"
+SLUG="${2:-sample-service}"
+SOURCE_PR="${3:-0}"
+SOURCE_BRANCH="${4:-unknown}"
+OUT_DIR="${5:-src/main/java}"
+CONFIG_PATH="${6:-.github/agent-prompts/config.yml}"
+PROMPT_PATH="${7:-.github/agent-prompts/generate_code.md}"
+
+require_file "$CONFIG_PATH"; require_file "$PROMPT_PATH"
+ensure_dir "$OUT_DIR"
+ensure_dir "src/test"
+ensure_dir "src/integrationTest"
+
+LANG="$(yaml_get project.language)"
+BASE_PACKAGE="$(yaml_get packages.basePackage)"
+JAVA_VERSION="$(yaml_get project.javaVersion)"
+PROGRAMMING_MODEL="$(yaml_get framework.programmingModel)"
+
+if [[ "$LANG" != "java" ]]; then
+  echo "Configured language=${LANG}. Full generator is currently implemented for java only."
+  exit 1
+fi
+
+mapfile -t READY_FILES < <(
+  if [[ -d "$INPUT_PATHS" ]]; then
+    find "$INPUT_PATHS" -type f -name "*READY*.md" | sort
+  elif [[ -f "$INPUT_PATHS" && "$INPUT_PATHS" == *READY* ]]; then
+    echo "$INPUT_PATHS"
+  fi
+)
+
+READY_STORIES="${#READY_FILES[@]}"
+if [[ "$READY_STORIES" -eq 0 ]]; then
+  log "No READY stories found in ${INPUT_PATHS}. Nothing to generate."
+  exit 0
+fi
+
+API_ENDPOINT="$(
+  grep -Ehoi '\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)[[:space:]]+/[A-Za-z0-9_./{}:-]*' "${READY_FILES[@]}" \
+    | head -n1 || true
+)"
+
+if [[ -z "$API_ENDPOINT" ]]; then
+  API_ENDPOINT="GET /generated/${SLUG}/items/{id}"
+fi
+
+RAW_PATH="$(echo "$API_ENDPOINT" | cut -d' ' -f2-)"
+BASE_PATH="$(echo "$RAW_PATH" | sed -E 's#\{[^}]+\}##g; s#//+#/#g; s#/$##')"
+if [[ -z "$BASE_PATH" ]]; then
+  BASE_PATH="/generated/${SLUG}/items"
+fi
+ITEM_PATH="${BASE_PATH}/{id}"
+
+PKG_PATH="$(echo "$BASE_PACKAGE" | tr '.' '/')"
+APP_DIR="src/main/java/${PKG_PATH}/agentic/${SLUG}"
+ensure_dir "$APP_DIR"
+
+cat > "${APP_DIR}/GeneratedItem.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import java.time.Instant;
+
+public class GeneratedItem {
+  private final String id;
+  private final String name;
+  private final String status;
+  private final Instant createdAt;
+  private final Instant updatedAt;
+
+  public GeneratedItem(String id, String name, String status, Instant createdAt, Instant updatedAt) {
+    this.id = id;
+    this.name = name;
+    this.status = status;
+    this.createdAt = createdAt;
+    this.updatedAt = updatedAt;
+  }
+
+  public String getId() {
+    return id;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public String getStatus() {
+    return status;
+  }
+
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public Instant getUpdatedAt() {
+    return updatedAt;
+  }
+}
+EOF
+
+cat > "${APP_DIR}/CreateGeneratedItemRequest.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import jakarta.validation.constraints.NotBlank;
+
+public record CreateGeneratedItemRequest(@NotBlank String name) { }
+EOF
+
+cat > "${APP_DIR}/UpdateGeneratedItemRequest.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import jakarta.validation.constraints.NotBlank;
+
+public record UpdateGeneratedItemRequest(
+    @NotBlank String name,
+    @NotBlank String status
+) { }
+EOF
+
+cat > "${APP_DIR}/GeneratedItemRepository.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+public class GeneratedItemRepository {
+  private final Map<String, GeneratedItem> store = new ConcurrentHashMap<>();
+
+  public Flux<GeneratedItem> findAll() {
+    List<GeneratedItem> values = new ArrayList<>(store.values());
+    return Flux.fromIterable(values);
+  }
+
+  public Mono<GeneratedItem> findById(String id) {
+    return Mono.justOrEmpty(Optional.ofNullable(store.get(id)));
+  }
+
+  public Mono<GeneratedItem> save(GeneratedItem item) {
+    store.put(item.getId(), item);
+    return Mono.just(item);
+  }
+
+  public Mono<Boolean> deleteById(String id) {
+    return Mono.just(store.remove(id) != null);
+  }
+}
+EOF
+
+cat > "${APP_DIR}/GeneratedItemService.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import java.time.Instant;
+import java.util.NoSuchElementException;
+import java.util.UUID;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+public class GeneratedItemService {
+  private final GeneratedItemRepository repository;
+
+  public GeneratedItemService(GeneratedItemRepository repository) {
+    this.repository = repository;
+  }
+
+  public Flux<GeneratedItem> list() {
+    return repository.findAll();
+  }
+
+  public Mono<GeneratedItem> getById(String id) {
+    return repository.findById(id)
+        .switchIfEmpty(Mono.error(new NoSuchElementException("Item not found: " + id)));
+  }
+
+  public Mono<GeneratedItem> create(CreateGeneratedItemRequest request) {
+    Instant now = Instant.now();
+    GeneratedItem item = new GeneratedItem(
+        UUID.randomUUID().toString(),
+        request.name(),
+        "ACTIVE",
+        now,
+        now
+    );
+    return repository.save(item);
+  }
+
+  public Mono<GeneratedItem> update(String id, UpdateGeneratedItemRequest request) {
+    return getById(id)
+        .flatMap(existing -> repository.save(new GeneratedItem(
+            existing.getId(),
+            request.name(),
+            request.status(),
+            existing.getCreatedAt(),
+            Instant.now()
+        )));
+  }
+
+  public Mono<Void> delete(String id) {
+    return repository.deleteById(id)
+        .flatMap(deleted -> deleted
+            ? Mono.<Void>empty()
+            : Mono.error(new NoSuchElementException("Item not found: " + id)));
+  }
+}
+EOF
+
+cat > "${APP_DIR}/GeneratedController.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import java.util.NoSuchElementException;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+@RestController
+public class GeneratedController {
+  private final GeneratedItemService service;
+
+  public GeneratedController() {
+    this(new GeneratedItemService(new GeneratedItemRepository()));
+  }
+
+  GeneratedController(GeneratedItemService service) {
+    this.service = service;
+  }
+
+  @GetMapping("${BASE_PATH}")
+  public Flux<GeneratedItem> list() {
+    return service.list();
+  }
+
+  @GetMapping("${ITEM_PATH}")
+  public Mono<ResponseEntity<GeneratedItem>> getById(@PathVariable String id) {
+    return service.getById(id).map(ResponseEntity::ok);
+  }
+
+  @PostMapping("${BASE_PATH}")
+  public Mono<ResponseEntity<GeneratedItem>> create(@Valid @RequestBody CreateGeneratedItemRequest request) {
+    return service.create(request)
+        .map(item -> ResponseEntity.status(HttpStatus.CREATED).body(item));
+  }
+
+  @PutMapping("${ITEM_PATH}")
+  public Mono<ResponseEntity<GeneratedItem>> update(
+      @PathVariable String id,
+      @Valid @RequestBody UpdateGeneratedItemRequest request
+  ) {
+    return service.update(id, request).map(ResponseEntity::ok);
+  }
+
+  @DeleteMapping("${ITEM_PATH}")
+  public Mono<ResponseEntity<Void>> delete(@PathVariable String id) {
+    return service.delete(id)
+        .thenReturn(ResponseEntity.noContent().build());
+  }
+
+  @ExceptionHandler(NoSuchElementException.class)
+  public ResponseEntity<Void> handleNotFound() {
+    return ResponseEntity.notFound().build();
+  }
+}
+EOF
+
+TEST_DIR="src/test/java/${PKG_PATH}/agentic/${SLUG}"
+ensure_dir "$TEST_DIR"
+cat > "${TEST_DIR}/GeneratedItemServiceTest.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import java.util.NoSuchElementException;
+import org.junit.jupiter.api.Test;
+import reactor.test.StepVerifier;
+
+class GeneratedItemServiceTest {
+  @Test
+  void creatingAndFetchingItemReturnsPersistedValues() {
+    GeneratedItemService service = new GeneratedItemService(new GeneratedItemRepository());
+
+    GeneratedItem created = service.create(new CreateGeneratedItemRequest("first-item")).block();
+    StepVerifier.create(service.getById(created.getId()))
+        .assertNext(found -> {
+          org.junit.jupiter.api.Assertions.assertEquals("first-item", found.getName());
+          org.junit.jupiter.api.Assertions.assertEquals("ACTIVE", found.getStatus());
+        })
+        .verifyComplete();
+  }
+
+  @Test
+  void updatingUnknownItemFails() {
+    GeneratedItemService service = new GeneratedItemService(new GeneratedItemRepository());
+    StepVerifier.create(service.update("missing", new UpdateGeneratedItemRequest("updated", "ACTIVE")))
+        .expectError(NoSuchElementException.class)
+        .verify();
+  }
+}
+EOF
+
+INT_DIR="src/integrationTest/java/${PKG_PATH}/agentic/${SLUG}"
+ensure_dir "$INT_DIR"
+cat > "${INT_DIR}/GeneratedControllerIT.java" <<EOF
+package ${BASE_PACKAGE}.agentic.${SLUG};
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.WebTestClient;
+
+class GeneratedControllerIT {
+  private final WebTestClient client = WebTestClient.bindToController(
+      new GeneratedController(new GeneratedItemService(new GeneratedItemRepository()))
+  ).build();
+
+  @Test
+  void createReadAndDeleteFlowWorks() {
+    GeneratedItem created = client.post()
+        .uri("${BASE_PATH}")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue("{\"name\":\"integration-item\"}")
+        .exchange()
+        .expectStatus().isCreated()
+        .expectBody(GeneratedItem.class)
+        .returnResult()
+        .getResponseBody();
+
+    Assertions.assertNotNull(created);
+    Assertions.assertNotNull(created.getId());
+
+    client.get()
+        .uri("${ITEM_PATH}", created.getId())
+        .exchange()
+        .expectStatus().isOk()
+        .expectBody()
+        .jsonPath("$.name").isEqualTo("integration-item");
+
+    client.delete()
+        .uri("${ITEM_PATH}", created.getId())
+        .exchange()
+        .expectStatus().isNoContent();
+
+    client.get()
+        .uri("${ITEM_PATH}", created.getId())
+        .exchange()
+        .expectStatus().isNotFound();
+  }
+
+  @Test
+  void updatingUnknownIdReturnsNotFound() {
+    client.put()
+        .uri("${ITEM_PATH}", "missing-id")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue("{\"name\":\"x\",\"status\":\"ACTIVE\"}")
+        .exchange()
+        .expectStatus().isNotFound();
+  }
+}
+EOF
+
+log "Processed READY stories: ${READY_STORIES}"
+log "Primary API route inferred from stories: ${BASE_PATH}"
+log "Defaults used: Java ${JAVA_VERSION}, model=${PROGRAMMING_MODEL}"

@@ -1,0 +1,43 @@
+project:
+  name: SampleService
+  language: java
+  javaVersion: 21
+
+framework:
+  type: spring-boot
+  version: 3.x
+  programmingModel: spring-webflux
+  buildTool: gradle
+
+packages:
+  basePackage: com.company.project
+
+testing:
+  unitTestFramework: junit5
+  mockingFramework: mockito
+  integrationTestFramework: junit5
+  integrationTestFolder: src/integrationTest
+  useTestcontainers: true
+
+documentation:
+  format: markdown
+  diagramFormat: mermaid
+  allowedDiagramFormats:
+    - mermaid
+    - plantuml
+
+security:
+  sonarqubeEnabled: true
+  blackduckEnabled: true
+  owaspDependencyCheckEnabled: true
+
+generation:
+  defaultBranch: develop
+  codeStyle: reactive
+  branchPrefix: auto
+
+deployment:
+  targetEnvironment: sandbox
+
+jira:
+  template: default

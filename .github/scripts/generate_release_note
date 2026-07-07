@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source .github/scripts/common.sh
+
+INPUT_PATHS="${1:-src}"
+SLUG="${2:-sample-service}"
+SOURCE_PR="${3:-0}"
+SOURCE_BRANCH="${4:-unknown}"
+OUT_DIR="${5:-releaseNote}"
+CONFIG_PATH="${6:-.github/agent-prompts/config.yml}"
+PROMPT_PATH="${7:-.github/agent-prompts/generate_release_note.md}"
+
+require_file "$CONFIG_PATH"; require_file "$PROMPT_PATH"
+ensure_dir "$OUT_DIR"
+
+REL_ID="REL-${SLUG^^}-001"
+
+cat > "${OUT_DIR}/${SLUG}-release-note.md" <<EOF
+# Release Note: ${SLUG}
+
+- Traceability: SRC-${SLUG^^}-* -> ${REL_ID}
+- Source PR: #${SOURCE_PR}
+- Source Branch: ${SOURCE_BRANCH}
+
+## Features Added
+- Added generated endpoint(s) for ${SLUG}
+
+## Bugs Fixed
+- N/A (template)
+
+## Tests Added/Updated
+- Unit tests under src/test/**
+- Integration tests under src/integrationTest/**
+
+## Security Changes
+- Security checks executed based on config flags.
+
+## DevOps/Configuration Changes
+- CI stage and workflow updates for pipeline chaining.
+
+## Breaking Changes
+- None known.
+EOF
+
+echo "${OUT_DIR}/${SLUG}-release-note.md"

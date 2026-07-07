@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source .github/scripts/common.sh
+
+INPUT_PATHS="${1:-docs/generated/lld}"
+SLUG="${2:-sample-service}"
+SOURCE_PR="${3:-0}"
+SOURCE_BRANCH="${4:-unknown}"
+OUT_DIR="${5:-docs/generated/stories}"
+CONFIG_PATH="${6:-.github/agent-prompts/config.yml}"
+PROMPT_PATH="${7:-.github/agent-prompts/generate_stories.md}"
+
+require_file "$CONFIG_PATH"; require_file "$PROMPT_PATH"
+ensure_dir "$OUT_DIR"
+
+i=1
+LLD_ID="LLD-${SLUG^^}-001"
+
+mapfile -t LLD_FILES < <(
+  if [[ -d "$INPUT_PATHS" ]]; then
+    find "$INPUT_PATHS" -type f \( -name "${SLUG}-lld.md" -o -name "*-lld.md" -o -name "*.md" \) | sort
+  elif [[ -f "$INPUT_PATHS" ]]; then
+    echo "$INPUT_PATHS"
+  fi
+)
+
+TARGET_LLD=""
+if [[ "${#LLD_FILES[@]}" -gt 0 ]]; then
+  for f in "${LLD_FILES[@]}"; do
+    if [[ "$(basename "$f")" == "${SLUG}-lld.md" ]]; then
+      TARGET_LLD="$f"
+      break
+    fi
+  done
+  if [[ -z "$TARGET_LLD" ]]; then
+    TARGET_LLD="${LLD_FILES[0]}"
+  fi
+fi
+
+if [[ -n "$TARGET_LLD" ]]; then
+  LLD_ID_FROM_FILE="$(grep -Eo 'LLD-[A-Z0-9-]+-[0-9]{3}' "$TARGET_LLD" | head -n1 || true)"
+  if [[ -n "$LLD_ID_FROM_FILE" ]]; then
+    LLD_ID="$LLD_ID_FROM_FILE"
+  fi
+fi
+
+mapfile -t API_CONTRACTS < <(
+  if [[ -n "$TARGET_LLD" ]]; then
+    grep -Eoi '\b(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)[[:space:]]+/[A-Za-z0-9_./{}:-]*' "$TARGET_LLD" \
+      | sed -E 's/[[:space:]]+/ /g' \
+      | awk '!seen[tolower($0)]++'
+  fi
+)
+
+if [[ "${#API_CONTRACTS[@]}" -eq 0 ]]; then
+  API_CONTRACTS=("GET /api/v1/items/{id}")
+fi
+
+for endpoint in "${API_CONTRACTS[@]}"; do
+  STORY_ID="STORY-${SLUG^^}-$(printf "%03d" "$i")"
+  method="$(echo "$endpoint" | awk '{print toupper($1)}')"
+  path="$(echo "$endpoint" | cut -d' ' -f2-)"
+  endpoint_slug="$(echo "${method}-${path}" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9]+#-#g; s#^-+|-+$##g')"
+  file="${OUT_DIR}/${SLUG}-api-${endpoint_slug}.md"
+  cat > "$file" <<EOF
+# [JIRA] API story for ${SLUG} (${method} ${path})
+
+## Story ID
+${STORY_ID}
+
+## Traceability
+${LLD_ID} -> ${STORY_ID}
+
+## Title
+API: ${method} ${path}
+
+## Description
+Implement API endpoint ${method} ${path} based on LLD for ${SLUG}.
+
+## Acceptance Criteria
+- [ ] Implementation complete
+- [ ] Tests added/updated
+- [ ] Docs updated where needed
+
+## Technical Notes
+- Follow project config and prompts.
+
+## Test Notes
+- Unit and integration test impact documented.
+
+## Security Notes
+- Validate security implications for this scope.
+
+## DevOps Notes
+- Update CI/CD or config if required.
+
+## Definition of Done
+- Code reviewed and merged to develop.
+EOF
+  ((i++))
+done
+
+types=("design" "devops" "testing" "security" "documentation")
+for t in "${types[@]}"; do
+  STORY_ID="STORY-${SLUG^^}-$(printf "%03d" "$i")"
+  file="${OUT_DIR}/${SLUG}-${t}.md"
+  cat > "$file" <<EOF
+# [JIRA] ${t^} story for ${SLUG}
+
+## Story ID
+${STORY_ID}
+
+## Traceability
+${LLD_ID} -> ${STORY_ID}
+
+## Title
+${t^}: ${SLUG}
+
+## Description
+Implement ${t} scope based on LLD for ${SLUG}.
+
+## Acceptance Criteria
+- [ ] Implementation complete
+- [ ] Tests added/updated
+- [ ] Docs updated where needed
+
+## Technical Notes
+- Follow project config and prompts.
+
+## Test Notes
+- Unit and integration test impact documented.
+
+## Security Notes
+- Validate security implications for this scope.
+
+## DevOps Notes
+- Update CI/CD or config if required.
+
+## Definition of Done
+- Code reviewed and merged to develop.
+EOF
+  ((i++))
+done
+
+echo "${OUT_DIR}"

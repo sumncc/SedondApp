@@ -1,0 +1,110 @@
+name: Agentic SDLC - Requirements to HLD
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Stage
+        required: false
+        default: requirements-to-hld
+      slug:
+        description: Slug
+        required: true
+      input_path:
+        description: Input path
+        required: false
+        default: docs/generated/requirements
+      target_branch:
+        description: Target branch
+        required: false
+        default: develop
+      config_path:
+        description: Config path
+        required: false
+        default: .github/agent-prompts/config.yml
+      prompt_path:
+        description: Prompt path
+        required: false
+        default: .github/agent-prompts/generate_hld.md
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-hld:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'develop' &&
+       github.event.pull_request.user.login != 'github-actions[bot]')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: req-hld-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.inputs.slug || 'auto' }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Detect changed files
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: docs/generated/requirements/**
+
+      - name: Skip if no relevant changes
+        if: github.event_name != 'workflow_dispatch' && steps.changed.outputs.any_changed != 'true'
+        run: echo "No requirements changes detected. Exiting."
+
+      - name: Setup Python
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: pip install pyyaml
+
+      - name: Compute slug
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        id: slug
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.slug }}" >> $GITHUB_OUTPUT
+          else
+            echo "value=pr-${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate HLD
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: |
+          chmod +x .github/scripts/*
+          .github/scripts/generate_hld \
+            "${{ github.event.inputs.input_path || 'docs/generated/requirements' }}" \
+            "${{ steps.slug.outputs.value }}" \
+            "${{ github.event.pull_request.number || 0 }}" \
+            "${{ github.head_ref || 'manual' }}" \
+            "docs/generated/hld" \
+            "${{ github.event.inputs.config_path || '.github/agent-prompts/config.yml' }}" \
+            "${{ github.event.inputs.prompt_path || '.github/agent-prompts/generate_hld.md' }}"
+
+      - name: Create PR
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: auto/hld/${{ steps.slug.outputs.value }}
+          base: develop
+          title: docs':' hld ${{ steps.slug.outputs.value }}
+          body: |
+            Source PR link: ${{ github.event.pull_request.html_url || 'manual-run' }}
+            Changed paths detected: ${{ steps.changed.outputs.all_changed_files || github.event.inputs.input_path }}
+            Generated files list: docs/generated/hld/**
+            Validation summary: generated HLD
+            Traceability summary: REQ -> HLD
+            Skipped files and reasons: none
+          commit-message: "docs: generate hld for ${{ steps.slug.outputs.value }}"

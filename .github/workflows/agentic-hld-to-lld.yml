@@ -1,0 +1,109 @@
+name: Agentic SDLC - HLD to LLD
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: Slug
+        required: true
+      input_path:
+        description: Input path
+        required: false
+        default: docs/generated/hld
+      target_branch:
+        description: Target branch
+        required: false
+        default: develop
+      config_path:
+        description: Config path
+        required: false
+        default: .github/agent-prompts/config.yml
+      prompt_path:
+        description: Prompt path
+        required: false
+        default: .github/agent-prompts/generate_lld.md
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-lld:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'develop')
+    runs-on: ubuntu-latest
+    concurrency:
+      group: hld-lld-${{ github.event.pull_request.number || github.run_id }}-${{ github.event.inputs.slug || 'auto' }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Detect changed files
+        id: changed
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+            docs/generated/hld/**
+
+      - name: Skip if no HLD changes
+        if: github.event_name != 'workflow_dispatch' && steps.changed.outputs.any_changed != 'true'
+        run: echo "No HLD changes detected."
+
+      - name: Setup Python
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        run: pip install pyyaml
+
+      - name: Compute slug
+        id: slug
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.slug }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate LLD
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        shell: bash
+        run: |
+          bash .github/scripts/generate_lld \
+            "${{ github.event.inputs.input_path || 'docs/generated/hld' }}" \
+            "${{ steps.slug.outputs.value }}" \
+            "${{ github.event.pull_request.number || 0 }}" \
+            "${{ github.head_ref || 'manual' }}" \
+            "docs/generated/lld" \
+            "${{ github.event.inputs.config_path || '.github/agent-prompts/config.yml' }}" \
+            "${{ github.event.inputs.prompt_path || '.github/agent-prompts/generate_lld.md' }}"
+
+      - name: Create PR
+        if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: auto/lld/${{ steps.slug.outputs.value }}
+          base: develop
+          title: docs:' lld ${{ steps.slug.outputs.value }}
+          commit-message: docs:' generate lld for ${{ steps.slug.outputs.value }}
+          body: |
+            Source PR link: ${{ github.event.pull_request.html_url || 'manual-run' }}
+            Changed paths detected: ${{ steps.changed.outputs.all_changed_files || github.event.inputs.input_path }}
+            Generated files list: docs/generated/lld/**
+            Validation summary: generated LLD
+            Traceability summary: HLD -> LLD
+            Skipped files and reasons: none
