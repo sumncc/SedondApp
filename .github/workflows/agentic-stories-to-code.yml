@@ -61,8 +61,8 @@ jobs:
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
-            ./gradlew clean test || true
-            ./gradlew integrationTest || true
+            ./gradlew clean test
+            ./gradlew integrationTest
           else
             echo "No gradlew found; skipping build/test commands."
           fi
@@ -81,6 +81,6 @@ jobs:
             Source PR link: ${{ github.event.pull_request.html_url || 'manual-run' }}
             Changed paths detected: ${{ steps.changed.outputs.all_changed_files || github.event.inputs.input_path }}
             Generated files list: src/**, src/test/**, src/integrationTest/**
-            Validation summary: build/tests executed (best effort)
+            Validation summary: build/tests must pass
             Traceability summary: STORY -> SRC
             Skipped files and reasons: non-READY stories skipped by filename filter

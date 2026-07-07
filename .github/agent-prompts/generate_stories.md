@@ -11,9 +11,10 @@ Generate JIRA-format stories from LLD.
 ## Requirements
 - Output folder: docs/generated/stories/
 - One story per file
+- Generated filenames must not include READY; users select stories by renaming chosen files to include READY for the next stage
 - Preserve traceability IDs: LLD-* -> STORY-*
 - Must cover:
-  - API/programming
+  - API/programming (create one API story for each endpoint listed in LLD API contracts)
   - design
   - DevOps
   - testing
