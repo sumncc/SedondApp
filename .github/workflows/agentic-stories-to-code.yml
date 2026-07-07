@@ -30,9 +30,9 @@ jobs:
       - id: changed
         uses: tj-actions/changed-files@v45
         with:
-          files: docs/generated/stories/**
+          files: docs/generated/stories/**/*READY*.md
       - if: github.event_name != 'workflow_dispatch' && steps.changed.outputs.any_changed != 'true'
-        run: echo "No stories changes detected."
+        run: echo "No READY story changes detected. Rename selected story files to include READY and merge to trigger code generation."
       - uses: actions/setup-java@v4
         if: github.event_name == 'workflow_dispatch' || steps.changed.outputs.any_changed == 'true'
         with:
@@ -79,7 +79,7 @@ jobs:
           commit-message: "feat: generate code for ${{ steps.slug.outputs.value }}"
           body: |
             Source PR link: ${{ github.event.pull_request.html_url || 'manual-run' }}
-            Changed paths detected: ${{ steps.changed.outputs.all_changed_files || github.event.inputs.input_path }}
+            Changed paths detected: ${{ steps.changed.outputs.all_changed_files || github.event.inputs.input_path }} (READY stories only)
             Generated files list: src/**, src/test/**, src/integrationTest/**
             Validation summary: build/tests must pass
             Traceability summary: STORY -> SRC

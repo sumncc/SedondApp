@@ -81,7 +81,7 @@ Edit `.github/agent-prompts/config.yml`:
 2. Auto PR: `docs: hld sample-order`
 3. Merge -> Auto PR: `docs: lld sample-order`
 4. Merge -> Auto PR: `docs: stories sample-order`
-5. Mark story file with `READY`
+5. Rename selected story files to include `READY` in the filename (only those files trigger code generation)
 6. Merge -> Auto PR: `feat: sample-order`
 7. Merge -> Auto PR: `docs: release note sample-order`
 8. Merge -> sandbox deploy workflow runs
